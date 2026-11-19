@@ -7,7 +7,13 @@ let package = Package(
     targets: [
         .target(
             name: "MacampCore",
-            exclude: ["Resources"],
+            resources: [
+                .embedInCode("Resources/Skins/Phosphor.json"),
+                .embedInCode("Resources/Skins/RackUnit.json"),
+                .embedInCode("Resources/Skins/NativeMini.json"),
+                .embedInCode("Resources/SKIN_GUIDE.md"),
+                .embedInCode("Resources/skin.schema.json"),
+            ],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .executableTarget(

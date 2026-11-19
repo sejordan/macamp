@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "macamp skin, format 1",
+  "type": "object",
+  "required": ["format", "window", "elements"],
+  "additionalProperties": false,
+  "properties": {
+    "format": { "const": 1 },
+    "name": { "type": "string" },
+    "author": { "type": "string" },
+    "window": { "$ref": "#/$defs/window" },
+    "palette": { "type": "object", "additionalProperties": { "$ref": "#/$defs/hexColor" } },
+    "paletteDark": { "type": "object", "additionalProperties": { "$ref": "#/$defs/hexColor" } },
+    "elements": { "type": "array", "maxItems": 500, "items": { "$ref": "#/$defs/element" } }
+  },
+  "$defs": {
+    "hexColor": { "type": "string", "pattern": "^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$" },
+    "color": { "type": "string", "pattern": "^(#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})|\\$.+)$" },
+    "fill": {
+      "anyOf": [
+        { "$ref": "#/$defs/color" },
+        {
+          "type": "object",
+          "required": ["gradient"],
+          "additionalProperties": false,
+          "properties": {
+            "gradient": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/color" } },
+            "angle": { "type": "number" }
+          }
+        }
+      ]
+    },
+    "border": {
+      "type": "object",
+      "required": ["color"],
+      "additionalProperties": false,
+      "properties": { "color": { "$ref": "#/$defs/color" }, "width": { "type": "number", "minimum": 0, "maximum": 100 } }
+    },
+    "bevel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "light": { "$ref": "#/$defs/color" },
+        "dark": { "$ref": "#/$defs/color" },
+        "width": { "type": "number", "minimum": 0, "maximum": 20 }
+      }
+    },
+    "glow": {
+      "anyOf": [
+        { "type": "number", "minimum": 0, "maximum": 100 },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "radius": { "type": "number", "minimum": 0, "maximum": 100 }, "color": { "$ref": "#/$defs/color" } }
+        }
+      ]
+    },
+    "font": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": { "type": "string" },
+        "size": { "type": "number", "minimum": 4, "maximum": 200 },
+        "weight": { "enum": ["light", "regular", "medium", "semibold", "bold"] }
+      }
+    },
+    "box": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "$ref": "#/$defs/fill" },
+        "border": { "$ref": "#/$defs/border" },
+        "cornerRadius": { "type": "number", "minimum": 0 },
+        "bevel": { "$ref": "#/$defs/bevel" }
+      }
+    },
+    "track": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "$ref": "#/$defs/fill" },
+        "border": { "$ref": "#/$defs/border" },
+        "cornerRadius": { "type": "number", "minimum": 0 },
+        "bevel": { "$ref": "#/$defs/bevel" },
+        "thickness": { "type": "number", "minimum": 0.5, "maximum": 500 }
+      }
+    },
+    "thumb": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "$ref": "#/$defs/fill" },
+        "border": { "$ref": "#/$defs/border" },
+        "cornerRadius": { "type": "number", "minimum": 0 },
+        "bevel": { "$ref": "#/$defs/bevel" },
+        "size": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "exclusiveMinimum": 0 } }
+      }
+    },
+    "buttonStyle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fill": { "$ref": "#/$defs/fill" },
+        "border": { "$ref": "#/$defs/border" },
+        "cornerRadius": { "type": "number", "minimum": 0 },
+        "bevel": { "$ref": "#/$defs/bevel" },
+        "color": { "$ref": "#/$defs/color" },
+        "glow": { "$ref": "#/$defs/glow" }
+      }
+    },
+    "action": {
+      "enum": ["play", "pause", "playPause", "stop", "previous", "next", "open", "shuffle", "repeat",
+               "close", "minimize", "toggleTime", "toggleVisualizer"]
+    },
+    "frame": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "type": "number" } },
+    "anchor": { "enum": ["top", "bottom", "stretch"] },
+    "window": {
+      "type": "object",
+      "required": ["size"],
+      "additionalProperties": false,
+      "properties": {
+        "size": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 80, "maximum": 2000 } },
+        "cornerRadius": { "type": "number", "minimum": 0, "maximum": 200 },
+        "background": { "$ref": "#/$defs/fill" },
+        "border": { "$ref": "#/$defs/border" },
+        "titleBar": { "enum": ["system", "none"] },
+        "resize": { "enum": ["none", "vertical"] },
+        "minHeight": { "type": "number", "minimum": 80, "maximum": 2000 },
+        "maxHeight": { "type": "number", "minimum": 80, "maximum": 2000 }
+      }
+    },
+    "element": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type", "frame"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "rect" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "fill": { "$ref": "#/$defs/fill" },
+            "border": { "$ref": "#/$defs/border" },
+            "cornerRadius": { "type": "number", "minimum": 0 },
+            "bevel": { "$ref": "#/$defs/bevel" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "frame", "text"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "text" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "text": { "type": "string" },
+            "font": { "$ref": "#/$defs/font" },
+            "color": { "$ref": "#/$defs/color" },
+            "glow": { "$ref": "#/$defs/glow" },
+            "align": { "enum": ["left", "center", "right"] },
+            "overflow": { "enum": ["clip", "ellipsis", "scroll"] },
+            "action": { "$ref": "#/$defs/action" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "frame"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "visualizer" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "bars": { "type": "integer", "minimum": 1, "maximum": 128 },
+            "gap": { "type": "number", "minimum": 0, "maximum": 100 },
+            "colors": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/color" } },
+            "segment": { "type": "number", "minimum": 0, "maximum": 100 },
+            "peaks": { "type": "boolean" },
+            "peakColor": { "$ref": "#/$defs/color" },
+            "cornerRadius": { "type": "number", "minimum": 0, "maximum": 100 },
+            "glow": { "$ref": "#/$defs/glow" },
+            "scopeColor": { "$ref": "#/$defs/color" },
+            "scopeWidth": { "type": "number", "minimum": 0.25, "maximum": 20 },
+            "background": { "$ref": "#/$defs/fill" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "frame", "binds"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "slider" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "binds": { "enum": ["seek", "volume"] },
+            "track": { "$ref": "#/$defs/track" },
+            "progress": { "$ref": "#/$defs/box" },
+            "thumb": { "$ref": "#/$defs/thumb" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "frame", "action"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "button" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "action": { "$ref": "#/$defs/action" },
+            "icon": { "anyOf": [{ "const": "none" }, { "$ref": "#/$defs/action" }] },
+            "label": { "type": "string" },
+            "font": { "$ref": "#/$defs/font" },
+            "iconSize": { "type": "number", "minimum": 2, "maximum": 200 },
+            "style": { "$ref": "#/$defs/buttonStyle" },
+            "hover": { "$ref": "#/$defs/buttonStyle" },
+            "pressed": { "$ref": "#/$defs/buttonStyle" },
+            "on": { "$ref": "#/$defs/buttonStyle" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "frame"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "playlist" },
+            "frame": { "$ref": "#/$defs/frame" },
+            "anchor": { "$ref": "#/$defs/anchor" },
+            "rowHeight": { "type": "number", "minimum": 8, "maximum": 100 },
+            "font": { "$ref": "#/$defs/font" },
+            "text": { "type": "string" },
+            "detail": { "type": "string" },
+            "color": { "$ref": "#/$defs/color" },
+            "detailColor": { "$ref": "#/$defs/color" },
+            "currentColor": { "$ref": "#/$defs/color" },
+            "currentBackground": { "$ref": "#/$defs/fill" },
+            "selectedColor": { "$ref": "#/$defs/color" },
+            "selectedBackground": { "$ref": "#/$defs/fill" },
+            "unplayableColor": { "$ref": "#/$defs/color" },
+            "background": { "$ref": "#/$defs/fill" },
+            "padding": { "type": "number", "minimum": 0, "maximum": 200 },
+            "rowCornerRadius": { "type": "number", "minimum": 0, "maximum": 100 },
+            "rowInset": { "type": "number", "minimum": 0, "maximum": 100 }
+          }
+        }
+      ]
+    }
+  }
+}

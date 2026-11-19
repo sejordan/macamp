@@ -1,0 +1,81 @@
+{
+  "format": 1,
+  "name": "Native Mini",
+  "author": "macamp",
+  "window": {
+    "size": [380, 318],
+    "background": "$bg",
+    "titleBar": "system",
+    "resize": "vertical",
+    "minHeight": 226
+  },
+  "palette": {
+    "bg": "#f4f4f5",
+    "fg": "#1d1d1f",
+    "sub": "#7c7c82",
+    "line": "#dcdce0",
+    "well": "#e9e9ec",
+    "accent": "#0a7aff",
+    "knob": "#ffffff",
+    "knobEdge": "#00000040"
+  },
+  "paletteDark": {
+    "bg": "#2a2a2d",
+    "fg": "#f2f2f4",
+    "sub": "#9a9aa1",
+    "line": "#3d3d42",
+    "well": "#1f1f22",
+    "accent": "#2f8dff",
+    "knob": "#e6e6ea",
+    "knobEdge": "#00000080"
+  },
+  "elements": [
+    { "type": "rect", "frame": [14, 32, 132, 66], "fill": "$well", "cornerRadius": 8 },
+    { "type": "visualizer", "frame": [22, 40, 116, 50], "bars": 14, "gap": 3, "cornerRadius": 2.5,
+      "colors": ["$accent"], "scopeColor": "$accent", "scopeWidth": 2 },
+
+    { "type": "text", "frame": [158, 36, 208, 20], "text": "{title}", "overflow": "ellipsis",
+      "font": { "family": "system", "size": 14, "weight": "semibold" }, "color": "$fg" },
+    { "type": "text", "frame": [158, 56, 208, 16], "text": "{artist}", "overflow": "ellipsis",
+      "font": { "family": "system", "size": 12 }, "color": "$sub" },
+    { "type": "text", "frame": [158, 80, 208, 14], "text": "{codec} · {sampleRate} · {bitrate}", "overflow": "ellipsis",
+      "font": { "family": "system", "size": 10.5 }, "color": "$sub" },
+
+    { "type": "text", "frame": [14, 108, 40, 14], "text": "{time}", "action": "toggleTime",
+      "font": { "family": "system", "size": 10.5 }, "color": "$sub" },
+    { "type": "slider", "frame": [56, 108, 268, 14], "binds": "seek",
+      "track": { "fill": "$line", "cornerRadius": 2, "thickness": 4 },
+      "progress": { "fill": "$accent", "cornerRadius": 2 },
+      "thumb": { "size": [14, 14], "fill": "$knob", "cornerRadius": 7, "border": { "color": "$knobEdge", "width": 0.5 } } },
+    { "type": "text", "frame": [326, 108, 40, 14], "text": "{duration}", "align": "right",
+      "font": { "family": "system", "size": 10.5 }, "color": "$sub" },
+
+    { "type": "button", "frame": [18, 134, 26, 26], "action": "shuffle", "iconSize": 14,
+      "style": { "color": "$sub", "cornerRadius": 6 }, "hover": { "fill": "$line" },
+      "pressed": { "fill": "$line", "color": "$fg" }, "on": { "color": "$accent" } },
+    { "type": "button", "frame": [48, 134, 26, 26], "action": "repeat", "iconSize": 14,
+      "style": { "color": "$sub", "cornerRadius": 6 }, "hover": { "fill": "$line" },
+      "pressed": { "fill": "$line", "color": "$fg" }, "on": { "color": "$accent" } },
+
+    { "type": "button", "frame": [128, 132, 30, 30], "action": "previous", "iconSize": 16,
+      "style": { "color": "$fg", "cornerRadius": 7 }, "hover": { "fill": "$line" }, "pressed": { "fill": "$line", "color": "$sub" } },
+    { "type": "button", "frame": [172, 129, 36, 36], "action": "playPause", "iconSize": 22,
+      "style": { "color": "$fg", "cornerRadius": 9 }, "hover": { "fill": "$line" }, "pressed": { "fill": "$line", "color": "$sub" } },
+    { "type": "button", "frame": [222, 132, 30, 30], "action": "next", "iconSize": 16,
+      "style": { "color": "$fg", "cornerRadius": 7 }, "hover": { "fill": "$line" }, "pressed": { "fill": "$line", "color": "$sub" } },
+
+    { "type": "slider", "frame": [282, 141, 84, 12], "binds": "volume",
+      "track": { "fill": "$line", "cornerRadius": 2, "thickness": 4 },
+      "progress": { "fill": "$sub", "cornerRadius": 2 },
+      "thumb": { "size": [12, 12], "fill": "$knob", "cornerRadius": 6, "border": { "color": "$knobEdge", "width": 0.5 } } },
+
+    { "type": "rect", "frame": [0, 172, 380, 1], "fill": "$line" },
+    { "type": "playlist", "frame": [0, 177, 380, 137], "anchor": "stretch", "rowHeight": 24,
+      "font": { "family": "system", "size": 12 },
+      "text": "{title}", "detail": "{duration}",
+      "color": "$fg", "detailColor": "$sub",
+      "currentColor": "#ffffff", "currentBackground": "$accent",
+      "selectedColor": "$fg", "selectedBackground": "$line",
+      "padding": 14, "rowInset": 6, "rowCornerRadius": 6 }
+  ]
+}
