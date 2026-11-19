@@ -31,6 +31,9 @@ public final class AudioPlayer: AudioPlaying {
 
     /// Bumped whenever queued audio is thrown away, so late callbacks can be recognized and ignored.
     private var generation = 0
+    /// Bumped by every command from outside (load, play, stop, seek). An end-of-track report is
+    /// delivered on another queue, and is dropped if a command arrived while it was on its way.
+    private var commandSerial = 0
     /// The file frame that the node's own clock counts from.
     private var baseFrame: AVAudioFramePosition = 0
     private var readFrame: AVAudioFramePosition = 0
@@ -81,8 +84,16 @@ public final class AudioPlayer: AudioPlaying {
         guard newFile.length > 0, newFile.processingFormat.sampleRate > 0 else {
             throw CocoaError(.fileReadCorruptFile)
         }
+        // Some damaged files open and report a length yet contain no audio that can be decoded.
+        // Find that out now, so the caller can treat the file as unplayable.
+        guard let probe = AVAudioPCMBuffer(pcmFormat: newFile.processingFormat, frameCapacity: 1024) else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        do { try newFile.read(into: probe, frameCount: 1024) } catch { throw CocoaError(.fileReadCorruptFile) }
+        guard probe.frameLength > 0 else { throw CocoaError(.fileReadCorruptFile) }
         let newInfo = Self.describe(newFile, url: url)
         queue.sync {
+            commandSerial += 1
             discardQueued()
             playing = false
             file = newFile
@@ -97,10 +108,16 @@ public final class AudioPlayer: AudioPlaying {
     public func play() {
         queue.sync {
             guard file != nil, !playing else { return }
+            commandSerial += 1
             guard startEngine() else { return }
             if pending == 0 {
                 if readFrame >= length { moveTo(0) }
                 fill()
+            }
+            guard pending > 0 else {
+                // Nothing could be decoded from here on, so this is the end of the track.
+                finish()
+                return
             }
             node.play()
             playing = true
@@ -120,6 +137,7 @@ public final class AudioPlayer: AudioPlaying {
 
     public func stop() {
         queue.sync {
+            commandSerial += 1
             discardQueued()
             playing = false
             if engine.isRunning { engine.pause() }
@@ -130,6 +148,7 @@ public final class AudioPlayer: AudioPlaying {
     public func seek(to seconds: Double) {
         queue.sync {
             guard file != nil else { return }
+            commandSerial += 1
             let target = seconds.isFinite ? AVAudioFramePosition((max(0, seconds) * sampleRate).rounded()) : 0
             discardQueued()
             moveTo(min(target, length))
@@ -254,7 +273,11 @@ public final class AudioPlayer: AudioPlaying {
         playing = false
         heldFrame = length
         baseFrame = length
-        callbackQueue.async { [weak self] in self?.onFinished?() }
+        let serial = commandSerial
+        callbackQueue.async { [weak self] in
+            guard let self, self.queue.sync(execute: { self.commandSerial == serial }) else { return }
+            self.onFinished?()
+        }
     }
 
     /// The output device changed (headphones unplugged, for example). Carry on from the same place.

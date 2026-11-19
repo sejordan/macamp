@@ -134,3 +134,65 @@ final class LockedFlag: @unchecked Sendable {
     func set() { lock.lock(); value = true; lock.unlock() }
     var isSet: Bool { lock.lock(); defer { lock.unlock() }; return value }
 }
+
+// MARK: Damaged files
+
+/// A copy of a fixture cut off after `bytes` bytes.
+private func truncated(_ name: String, bytes: Int) throws -> URL {
+    let source = TestAudio.file(name)
+    let data = try Data(contentsOf: source).prefix(bytes)
+    let url = FileManager.default.temporaryDirectory
+        .appendingPathComponent("macamp-cut-\(UUID().uuidString).\(source.pathExtension)")
+    try Data(data).write(to: url)
+    return url
+}
+
+final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func increment() { lock.lock(); count += 1; lock.unlock() }
+    var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+}
+
+@Test func aFileWithAHeaderButNoAudioIsRejected() throws {
+    let url = try truncated("long.flac", bytes: 120)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(throws: (any Error).self) { try AudioPlayer().load(url) }
+}
+
+@Test func playingPastTheEndOfATruncatedFileEndsInsteadOfHanging() async throws {
+    let size = try Data(contentsOf: TestAudio.file("long.flac")).count
+    let url = try truncated("long.flac", bytes: size / 2)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let player = AudioPlayer(callbackQueue: DispatchQueue(label: "test.callbacks3"))
+    player.volume = 0
+    try player.load(url)
+    let finished = LockedFlag()
+    player.onFinished = { finished.set() }
+    player.seek(to: 5.5)               // the header claims 6 seconds; the audio stops near 3
+    player.play()
+    for _ in 0..<25 where !finished.isSet { try await Task.sleep(for: .milliseconds(100)) }
+    #expect(finished.isSet, "the player is stuck on a position with no audio behind it")
+    #expect(!player.isPlaying)
+}
+
+@Test func anEndReportedLateForAnEarlierFileIsDropped() async throws {
+    let callbacks = DispatchQueue(label: "test.held")
+    let player = AudioPlayer(callbackQueue: callbacks)
+    player.volume = 0
+    let reports = LockedCounter()
+    player.onFinished = { reports.increment() }
+    try player.load(TestAudio.file("tone.wav"))
+    player.play()
+    let gate = DispatchSemaphore(value: 0)
+    callbacks.async { gate.wait() }    // hold the queue that end-of-track reports arrive on
+    player.seek(to: 999)               // ends the first file; its report is now waiting behind the gate
+    try await Task.sleep(for: .milliseconds(150))
+    try player.load(TestAudio.file("long.wav"))
+    player.play()
+    gate.signal()
+    try await Task.sleep(for: .milliseconds(300))
+    #expect(reports.value == 0, "the first file's end was reported against the second file")
+    #expect(player.isPlaying)
+    player.stop()
+}

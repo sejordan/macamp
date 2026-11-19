@@ -226,3 +226,18 @@ private func currentName(_ p: PlayerController) -> String? {
     p.playTrack(at: 5); p.playTrack(at: -1)
     #expect(p.status == .stopped)
 }
+
+@Test func shuffleWithRepeatAllFindsThePlayableTrackAmongBadOnes() {
+    for _ in 0..<60 {
+        let (p, audio) = make("bad1", "bad2", "good")
+        audio.failing = ["bad1", "bad2"]
+        var order = PlaybackOrder()
+        order.shuffle = true
+        order.repeatMode = .all
+        p.order = order
+        p.playTrack(at: 2)
+        audio.finish()                 // the good track ends; every other track is bad
+        #expect(p.status == .playing && currentName(p) == "good")
+        if p.status != .playing { break }
+    }
+}

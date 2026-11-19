@@ -44,7 +44,7 @@ final class SkinView: NSView {
     private var playlists: [Int] = []
     private var marquees: Set<Int> = []
     private var textCache: [Int: String] = [:]
-    private var seekCache: [Int: CGFloat] = [:]
+    private var seekCache: [Int: Int] = [:]
 
     // Visualizer
     private let analyzer = SpectrumAnalyzer()
@@ -221,9 +221,9 @@ final class SkinView: NSView {
             }
         }
         for i in seekSliders {
-            let x = (renderer.layout.sliderGeometry(element: i, value: state.seekFraction).progress.maxX * 2).rounded() / 2
-            if seekCache[i] != x {
-                seekCache[i] = x
+            let key = renderer.layout.sliderRepaintKey(element: i, value: state.seekFraction)
+            if seekCache[i] != key {
+                seekCache[i] = key
                 invalidate(i)
             }
         }
@@ -275,7 +275,15 @@ final class SkinView: NSView {
 
     // MARK: Tiles
 
-    private var animatedElements: Set<Int> { Set(visualizers).union(marquees) }
+    private var animatedElements: Set<Int> {
+        Set(visualizers).union(marquees).filter { tileFrame($0) != nil }
+    }
+
+    /// The part of an element that is inside the window, which is all a tile ever needs to cover.
+    private func tileFrame(_ element: Int) -> CGRect? {
+        let frame = renderer.layout.frames[element].intersection(renderer.layout.windowRect)
+        return frame.isNull || frame.width < 1 || frame.height < 1 ? nil : frame
+    }
 
     private func removeTiles() {
         guard !tiles.isEmpty else { return }
@@ -297,7 +305,8 @@ final class SkinView: NSView {
         for element in wanted where tiles[element] == nil {
             let tile = Tile()
             tile.layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull(), "frame": NSNull()]
-            tile.layer.frame = convertToLayer(renderer.layout.frames[element])
+            guard let frame = tileFrame(element) else { continue }
+            tile.layer.frame = convertToLayer(frame)
             layer?.addSublayer(tile.layer)
             tiles[element] = tile
         }
@@ -306,8 +315,7 @@ final class SkinView: NSView {
     /// Draws everything that falls inside one element's frame into its tile, through the same
     /// renderer as the rest of the window, so the tile matches what lies beneath it exactly.
     private func renderTile(_ element: Int, state: RenderState) {
-        guard let tile = tiles[element] else { return }
-        let frame = renderer.layout.frames[element]
+        guard let tile = tiles[element], let frame = tileFrame(element) else { return }
         let scale = window?.backingScaleFactor ?? 2
         if tile.context == nil || tile.size != frame.size || tile.scale != scale {
             tile.context = PNGRenderer.makeContext(width: frame.width, height: frame.height, scale: scale)

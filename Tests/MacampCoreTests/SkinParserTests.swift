@@ -377,3 +377,14 @@ private func expectOneError(_ result: SkinParseResult, at path: String, sourceLo
     #expect(result.warnings.map(\.path) == ["elements[0].text"])
     #expect(result.warnings.first?.message.contains("titel") == true)
 }
+
+@Test func elementFramesMustStayWithinSaneBounds() {
+    expectOneError(parseElement(#"{"type": "rect", "frame": [0, 0, 100, 1e300]}"#), at: "elements[0].frame")
+    expectOneError(parseElement(#"{"type": "rect", "frame": [0, 0, 10001, 10]}"#), at: "elements[0].frame")
+    expectOneError(parseElement(#"{"type": "rect", "frame": [1e9, 0, 10, 10]}"#), at: "elements[0].frame")
+    expectOneError(parseElement(#"{"type": "rect", "frame": [0, -10001, 10, 10]}"#), at: "elements[0].frame")
+    expectOneError(parse(skinJSON(elements: [#"{"type": "playlist", "frame": [0, 0, 100, 1e300]}"#])), at: "elements[0].frame")
+    expectOneError(parseElement(#"{"type": "slider", "frame": [0, 0, 100, 10], "binds": "seek", "thumb": {"size": [1e12, 10]}}"#),
+                   at: "elements[0].thumb.size")
+    #expect(parseElement(#"{"type": "rect", "frame": [-50, -50, 10000, 10000]}"#).skin != nil)
+}

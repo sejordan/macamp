@@ -16,9 +16,13 @@ final class SkinManager {
     /// Called on the main thread after the skin or its error changes.
     var onChange: (() -> Void)?
 
-    private var watcher: DispatchSourceFileSystemObject?
+    /// The most recent source that actually loaded. This is what gets remembered,
+    /// so a file that never worked cannot replace the user's skin at the next launch.
+    private var lastGood: String
+    private var fileWatcher: DispatchSourceFileSystemObject?
+    /// Watches the skin's folder while the file itself is absent, to notice it coming back.
+    private var folderWatcher: DispatchSourceFileSystemObject?
     private var reloadPending = false
-    private var rearmAttempts = 0
 
     static var skinsFolder: URL { AppState.supportDirectory.appendingPathComponent("Skins", isDirectory: true) }
 
@@ -26,25 +30,33 @@ final class SkinManager {
         NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    /// `saved` is a built-in name or the path of a skin file. Anything unusable falls back to the default skin.
-    init(saved: String) {
+    /// `saved` is what was remembered from the last run: a built-in name or a file path. If it can
+    /// no longer be used, the default skin is shown without complaint.
+    /// `requested` is a skin the user asked for at launch. That one is kept and watched even if it
+    /// is broken, with its error on show, because they are presumably about to fix it.
+    init(saved: String, requested: String? = nil) {
         let fallbackName = BuiltinSkins.defaultName
         current = SkinParser.parse(data: BuiltinSkins.data(named: fallbackName)!, dark: Self.isDark).skin!
         source = .builtin(fallbackName)
+        lastGood = fallbackName
+
         if let name = BuiltinSkins.canonicalName(saved) {
             select(builtin: name)
-        } else if saved.hasPrefix("/") {
+        } else if saved.hasPrefix("/"), let data = try? Data(contentsOf: URL(fileURLWithPath: saved)),
+                  SkinParser.parse(data: data, dark: Self.isDark).skin != nil {
             open(file: URL(fileURLWithPath: saved))
+        }
+        if let requested {
+            if let name = BuiltinSkins.canonicalName(requested) {
+                select(builtin: name)
+            } else {
+                open(file: URL(fileURLWithPath: requested))
+            }
         }
     }
 
     /// What to store so the same skin comes back next launch.
-    var savedIdentifier: String {
-        switch source {
-        case .builtin(let name): return name
-        case .file(let url): return url.path
-        }
-    }
+    var savedIdentifier: String { lastGood }
 
     func select(builtin name: String) {
         guard let canonical = BuiltinSkins.canonicalName(name), let data = BuiltinSkins.data(named: canonical),
@@ -53,15 +65,14 @@ final class SkinManager {
         source = .builtin(canonical)
         current = skin
         currentError = nil
+        lastGood = canonical
         onChange?()
     }
 
     /// Uses a skin file where it sits and watches it. If the file has errors, the
     /// skin already on screen stays and the error is reported until the file is fixed.
     func open(file url: URL) {
-        stopWatching()
         source = .file(url.standardizedFileURL)
-        rearmAttempts = 0
         loadFile()
         watch()
         onChange?()
@@ -71,6 +82,7 @@ final class SkinManager {
         switch source {
         case .builtin(let name): select(builtin: name)
         case .file:
+            if fileWatcher == nil { watch() }
             loadFile()
             onChange?()
         }
@@ -88,7 +100,7 @@ final class SkinManager {
             .sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
     }
 
-    // MARK: Loading and watching
+    // MARK: Loading
 
     private func loadFile() {
         guard case .file(let url) = source else { return }
@@ -105,6 +117,7 @@ final class SkinManager {
         if let skin = result.skin {
             current = skin
             currentError = nil
+            lastGood = url.path
         } else {
             let errors = result.errors
             let more = errors.count > 1 ? "  (+\(errors.count - 1) more)" : ""
@@ -112,42 +125,53 @@ final class SkinManager {
         }
     }
 
+    // MARK: Watching
+
     private func stopWatching() {
-        watcher?.cancel()
-        watcher = nil
+        fileWatcher?.cancel()
+        fileWatcher = nil
+        folderWatcher?.cancel()
+        folderWatcher = nil
     }
 
-    private func watch() {
-        guard case .file(let url) = source else { return }
-        let descriptor = Darwin.open(url.path, O_EVTONLY)
-        guard descriptor >= 0 else {
-            // The file is missing, perhaps mid-save. Look again shortly, a limited number of times.
-            guard rearmAttempts < 20 else { return }
-            rearmAttempts += 1
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-                guard let self, self.watcher == nil, self.source == .file(url) else { return }
-                self.watch()
-                if self.watcher != nil { self.scheduleReload() }
-            }
-            return
-        }
-        rearmAttempts = 0
-        let watcher = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor,
-                                                                eventMask: [.write, .extend, .delete, .rename, .attrib],
-                                                                queue: .main)
-        watcher.setEventHandler { [weak self, weak watcher] in
-            guard let self, let watcher else { return }
-            let replaced = !watcher.data.intersection([.delete, .rename]).isEmpty
-            if replaced {
-                // Editors that save by writing a new file and renaming it leave us watching the old one.
-                self.stopWatching()
-                self.watch()
-            }
-            self.scheduleReload()
+    private func makeWatcher(path: String, events: DispatchSource.FileSystemEvent,
+                             handler: @escaping (DispatchSource.FileSystemEvent) -> Void) -> DispatchSourceFileSystemObject? {
+        let descriptor = Darwin.open(path, O_EVTONLY)
+        guard descriptor >= 0 else { return nil }
+        let watcher = DispatchSource.makeFileSystemObjectSource(fileDescriptor: descriptor, eventMask: events, queue: .main)
+        watcher.setEventHandler { [weak watcher] in
+            if let watcher { handler(watcher.data) }
         }
         watcher.setCancelHandler { close(descriptor) }
         watcher.resume()
-        self.watcher = watcher
+        return watcher
+    }
+
+    /// Watches the active skin file. While the file does not exist, watches its folder instead,
+    /// so the file is picked up again whenever it reappears, however long that takes.
+    private func watch() {
+        stopWatching()
+        guard case .file(let url) = source else { return }
+        fileWatcher = makeWatcher(path: url.path, events: [.write, .extend, .delete, .rename, .attrib]) { [weak self] events in
+            guard let self, self.source == .file(url) else { return }
+            // Editors that save by writing a new file and renaming it over the old one leave
+            // this watcher attached to the old file, so attach to whatever is at the path now.
+            if !events.intersection([.delete, .rename]).isEmpty { self.watch() }
+            self.scheduleReload()
+        }
+        guard fileWatcher == nil else { return }
+
+        let folder = url.deletingLastPathComponent().path
+        folderWatcher = makeWatcher(path: folder, events: [.write, .rename, .delete]) { [weak self] _ in
+            guard let self, self.source == .file(url), FileManager.default.fileExists(atPath: url.path) else { return }
+            self.watch()
+            self.scheduleReload()
+        }
+        // The file may have appeared between the two attempts above.
+        if folderWatcher != nil, FileManager.default.fileExists(atPath: url.path) {
+            watch()
+            scheduleReload()
+        }
     }
 
     /// Several events arrive for one save; reload once after they settle.

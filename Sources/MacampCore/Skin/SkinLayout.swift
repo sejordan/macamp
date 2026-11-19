@@ -58,6 +58,15 @@ public struct SkinLayout {
         return Double(min(1, max(0, (along - thumbLength / 2) / travel)))
     }
 
+    /// A number that changes whenever a slider showing `value` would look different.
+    /// Views compare it between frames to decide whether the slider needs repainting.
+    public func sliderRepaintKey(element: Int, value: Double) -> Int {
+        guard let (_, frame, horizontal, thumbLength) = slider(element) else { return 0 }
+        let travel = (horizontal ? frame.width : frame.height) - thumbLength
+        let v = min(1, max(0, value.isFinite ? value : 0))
+        return Int((CGFloat(v) * max(0, travel) * 2).rounded())   // half-point steps
+    }
+
     public struct SliderGeometry: Equatable {
         public var track: CGRect
         public var progress: CGRect

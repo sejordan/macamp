@@ -54,7 +54,8 @@ swift run macamp            # run without making an app bundle
 | Command-O | Open files |
 | Command-K | Clear the playlist |
 
-The keyboard media keys and the system Now Playing panel work too.
+The player also registers for the keyboard media keys and publishes the
+current track to the system Now Playing panel.
 
 ## Skins
 
@@ -105,6 +106,23 @@ with `footprint` and `top`:
 | Stopped, same playlist loaded | 18 MB | 0% |
 
 The app bundle is 1.3 MB.
+
+Paused, hidden and minimized were not measured separately. They take the same
+path as stopped: the audio engine is paused and the redraw timer is off.
+
+## Not yet checked by hand
+
+The logic behind these is covered by tests, but nobody has tried them with a
+real mouse, keyboard or screen yet:
+
+- Dragging files, folders and skin files onto the window and the Dock icon.
+- The menus and their shortcuts, and File > Open.
+- The keyboard media keys and the Now Playing panel.
+- Dragging and resizing the window, especially in the Rack Unit skin, which
+  has no system title bar, and minimizing it.
+- How the moving bars look on a real display. They are drawn in small overlay
+  layers; their placement was checked by rendering, not by eye.
+- Unplugging headphones or switching output device mid-song.
 
 ## Project layout
 

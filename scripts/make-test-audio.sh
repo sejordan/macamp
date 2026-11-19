@@ -30,6 +30,7 @@ afconvert -f caff -d LEI16 tone.wav tone.caf
 afconvert -f m4af -d aac tone.wav tone-aac.m4a
 afconvert -f m4af -d alac tone.wav tone-alac.m4a
 afconvert -f flac -d flac tone.wav tone.flac
+afconvert -f flac -d flac long.wav long.flac
 
 if command -v lame >/dev/null 2>&1; then
   lame --quiet -b 128 tone.wav tone.mp3

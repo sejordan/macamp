@@ -40,7 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         order.repeatMode = state.repeatMode
         controller.order = order
 
-        skins = SkinManager(saved: options.skinPath ?? state.skin)
+        skins = SkinManager(saved: state.skin, requested: options.skinPath)
         windowController = PlayerWindowController(controller: controller, skin: skins.current,
                                                   origin: state.windowOrigin, height: state.windowHeight)
         view.showRemaining = state.showRemaining
@@ -222,6 +222,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func volumeUp(_ sender: Any?) { controller.volume = min(1, controller.volume + 0.05) }
     @objc func volumeDown(_ sender: Any?) { controller.volume = max(0, controller.volume - 0.05) }
     @objc func closeWindow(_ sender: Any?) { windowController.window.close() }
+    @objc func minimizeWindow(_ sender: Any?) { windowController.window.miniaturize(nil) }
 
     // MARK: Skin menu
 

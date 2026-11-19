@@ -8,6 +8,9 @@ public enum SkinParser {
     public static let elementTypes = ["rect", "text", "visualizer", "slider", "button", "playlist"]
     public static let maxElements = 500
     public static let windowSizeRange = 80.0...2000.0
+    /// Element positions and sizes must stay within this many points. Far larger than any
+    /// window, and small enough that nothing downstream overflows or loops for minutes.
+    public static let maxCoordinate = 10_000.0
     public static let defaultForeground = RGBA(hex: "#d0d0d0")!
     public static let defaultBackground = RGBA(hex: "#1e1e1e")!
 
@@ -500,10 +503,13 @@ private struct SkinBuilder {
         var frame: CGRect?
         if r.has("frame") {
             if let n = r.numbers("frame", count: 4) {
-                if n[2] > 0, n[3] > 0 {
-                    frame = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
-                } else {
+                let limit = SkinParser.maxCoordinate
+                if n[2] <= 0 || n[3] <= 0 {
                     log.error(r.at("frame"), "width and height must be greater than 0, got \(ObjectReader.trim(n[2])) by \(ObjectReader.trim(n[3]))")
+                } else if n.contains(where: { abs($0) > limit }) {
+                    log.error(r.at("frame"), "every value must be within \(Int(limit)) points of zero")
+                } else {
+                    frame = CGRect(x: n[0], y: n[1], width: n[2], height: n[3])
                 }
             }
         } else {
@@ -587,10 +593,10 @@ private struct SkinBuilder {
         if let t = r.child("thumb", kinds: ["thumb"]) {
             thumb = t.box(over: BoxStyle(fill: .solid(SkinParser.defaultForeground)))
             if t.has("size"), let n = t.numbers("size", count: 2) {
-                if n[0] > 0, n[1] > 0 {
+                if n[0] > 0, n[1] > 0, n[0] <= SkinParser.maxCoordinate, n[1] <= SkinParser.maxCoordinate {
                     thumbSize = CGSize(width: n[0], height: n[1])
                 } else {
-                    log.error(t.at("size"), "width and height must be greater than 0")
+                    log.error(t.at("size"), "width and height must be greater than 0 and at most \(Int(SkinParser.maxCoordinate))")
                 }
             }
             t.warnAboutUnknownFields()

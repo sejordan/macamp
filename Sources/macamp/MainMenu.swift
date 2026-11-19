@@ -42,7 +42,9 @@ enum MainMenu {
         ]))
         main.addItem(submenu("Edit", [
             item("Select All", #selector(AppDelegate.selectAllRows(_:)), "a"),
-            item("Remove from Playlist", #selector(AppDelegate.removeSelectedRows(_:)), "\u{8}", []),
+            // No shortcut here on purpose: a bare Delete in the menu would fire while typing in a dialog.
+            // The player window handles the Delete key itself.
+            item("Remove from Playlist", #selector(AppDelegate.removeSelectedRows(_:))),
         ]))
         let controls = submenu("Controls", tag: controlsMenuTag, [
             item("Play", #selector(AppDelegate.menuAction(_:)), tag: actionTag(.playPause)),
@@ -67,7 +69,7 @@ enum MainMenu {
         main.addItem(skins)
 
         let window = submenu("Window", [
-            item("Minimize", #selector(NSWindow.performMiniaturize(_:)), "m"),
+            item("Minimize", #selector(AppDelegate.minimizeWindow(_:)), "m"),
             item("Close", #selector(AppDelegate.closeWindow(_:)), "w"),
         ])
         main.addItem(window)

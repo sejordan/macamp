@@ -330,3 +330,11 @@ private func render(_ elements: [String], window: String = blackWindow,
     let data = try Data(contentsOf: url)
     #expect(data.prefix(4) == Data([0x89, 0x50, 0x4E, 0x47]))
 }
+
+@Test func absurdBitmapSizesAreRefusedWithoutCrashing() {
+    #expect(PNGRenderer.makeContext(width: 1e300, height: 10, scale: 2) == nil)
+    #expect(PNGRenderer.makeContext(width: 10, height: .infinity, scale: 1) == nil)
+    #expect(PNGRenderer.makeContext(width: .nan, height: 10, scale: 1) == nil)
+    #expect(PNGRenderer.makeContext(width: 0, height: 10, scale: 1) == nil)
+    #expect(PNGRenderer.makeContext(width: 10, height: 10, scale: 2) != nil)
+}

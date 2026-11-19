@@ -204,30 +204,46 @@ public final class PlayerController {
         status = .stopped
     }
 
-    /// Plays `id`, or the next track that can actually be opened. Gives up after trying every track once.
+    /// Opens and plays one track. Returns false, marking it unplayable, if the file cannot be played.
+    private func tryToPlay(_ id: UUID) -> Bool {
+        guard let index = playlist.index(of: id) else { return false }
+        do {
+            try audio.load(playlist.tracks[index].url)
+        } catch {
+            playlist.update(id: id) { $0.unplayable = true }
+            ordering.noteStarted(id)
+            return false
+        }
+        let length = audio.duration
+        playlist.update(id: id) {
+            $0.unplayable = false
+            if length > 0 { $0.duration = length }
+        }
+        playlist.currentID = id
+        loadedID = id
+        ordering.noteStarted(id)
+        audio.play()
+        status = .playing
+        onChange?()
+        return true
+    }
+
+    /// Plays `id`, or failing that the next track that can actually be opened.
+    /// Each track is tried at most once, so a playlist of bad files stops instead of spinning.
     private func start(_ id: UUID) {
+        var tried: Set<UUID> = []
         var candidate: UUID? = id
-        var attempts = 0
-        while let next = candidate, attempts < max(1, playlist.count), let index = playlist.index(of: next) {
-            attempts += 1
-            do {
-                try audio.load(playlist.tracks[index].url)
-                let length = audio.duration
-                playlist.update(id: next) {
-                    $0.unplayable = false
-                    if length > 0 { $0.duration = length }
-                }
-                playlist.currentID = next
-                loadedID = next
-                ordering.noteStarted(next)
-                audio.play()
-                status = .playing
-                onChange?()
-                return
-            } catch {
-                playlist.update(id: next) { $0.unplayable = true }
-                ordering.noteStarted(next)
-                candidate = ordering.next(in: playlist.ids, current: next, auto: false)
+        var steps = 0
+        while let next = candidate, tried.count < playlist.count, steps < playlist.count * 2 + 2 {
+            steps += 1
+            if tried.insert(next).inserted, tryToPlay(next) { return }
+            candidate = ordering.next(in: playlist.ids, current: next, auto: false)
+        }
+        // Shuffle may keep offering tracks already tried. If the order has not said "the end",
+        // go through whatever is left in playlist order so a playable track is never missed.
+        if candidate != nil {
+            for other in playlist.ids where !tried.contains(other) {
+                if tryToPlay(other) { return }
             }
         }
         audio.stop()

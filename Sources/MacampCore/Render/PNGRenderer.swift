@@ -6,8 +6,11 @@ import ImageIO
 public enum PNGRenderer {
     /// A bitmap context whose coordinates are in points with y pointing down.
     public static func makeContext(width: CGFloat, height: CGFloat, scale: CGFloat) -> CGContext? {
-        let w = Int((width * scale).rounded()), h = Int((height * scale).rounded())
-        guard w > 0, h > 0, w <= 16_000, h <= 16_000,
+        let pixelWidth = (width * scale).rounded(), pixelHeight = (height * scale).rounded()
+        guard pixelWidth.isFinite, pixelHeight.isFinite, pixelWidth >= 1, pixelHeight >= 1,
+              pixelWidth <= 16_000, pixelHeight <= 16_000 else { return nil }
+        let w = Int(pixelWidth), h = Int(pixelHeight)
+        guard
               let space = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                                   space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)

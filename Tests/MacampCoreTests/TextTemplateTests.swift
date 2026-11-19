@@ -82,3 +82,16 @@ private func values(_ change: (inout TemplateValues) -> Void = { _ in }) -> Temp
     #expect(TextTemplate("open { brace").render(values()) == "open { brace")
     #expect(TextTemplate("").render(values()) == "")
 }
+
+@Test func textMadeOnlyOfEmptyValuesAndPunctuationRendersAsNothing() {
+    let nothing = TemplateValues()
+    #expect(TextTemplate("{index}. {display}").render(nothing) == "")
+    #expect(TextTemplate("{codec} · {sampleRate} · {bitrate} · {channels}").render(nothing) == "")
+    #expect(TextTemplate("{index}. {display} ({duration})").render(nothing) == "")
+    #expect(TextTemplate("{time:pad}").render(nothing) == "00:00")          // time always has a value
+    #expect(TextTemplate("{index}/{count}").render(nothing) == "/0")          // count has a value, so the text stays
+    #expect(TextTemplate("MACAMP").render(nothing) == "MACAMP")               // no tokens: literal text is untouched
+    var some = TemplateValues()
+    some.codec = "MP3"
+    #expect(TextTemplate("{codec} · {sampleRate}").render(some) == "MP3 · ")
+}

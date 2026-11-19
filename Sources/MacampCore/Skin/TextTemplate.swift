@@ -95,15 +95,22 @@ public struct TextTemplate: Equatable {
         self.unknownTokens = unknown
     }
 
+    /// When the text has tokens and every one of them is empty, the result is empty too,
+    /// so separators and brackets around missing values do not show on their own.
     public func render(_ v: TemplateValues) -> String {
         var out = ""
+        var hasToken = false, hasValue = false
         for segment in segments {
             switch segment {
             case .literal(let s): out += s
-            case .token(let name, let pad): out += Self.value(name, pad: pad, v)
+            case .token(let name, let pad):
+                let value = Self.value(name, pad: pad, v)
+                hasToken = true
+                if !value.isEmpty { hasValue = true }
+                out += value
             }
         }
-        return out
+        return hasToken && !hasValue ? "" : out
     }
 
     private static func nonEmpty(_ s: String?) -> String? {

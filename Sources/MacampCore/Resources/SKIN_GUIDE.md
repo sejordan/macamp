@@ -169,6 +169,11 @@ The four time tokens accept `:pad` for two-digit minutes: `{time:pad}` shows
 `01:24`. Write `{{` for a literal brace. An unknown token produces a warning
 and is shown as typed.
 
+When a text has tokens and every one of them is empty, as happens before any
+track is loaded, the whole text is drawn as nothing. Separators and brackets
+around missing values never appear alone, so `{index}. {display} ({duration})`
+is safe to use.
+
 ## `visualizer`
 
 Shows spectrum bars or an oscilloscope line. Clicking it switches between
@@ -269,9 +274,15 @@ These are errors. The skin does not load until they are fixed.
 
 - Window width and height: 80 to 2000.
 - Elements: at most 500.
-- Frame width and height: greater than 0.
+- Frame width and height: greater than 0. Every frame value, and a thumb's
+  `size`, must be within 10,000 points of zero.
 - `bars`: 1 to 128. Font `size`: 4 to 200. `rowHeight`: 8 to 100.
 - A gradient needs at least 2 colors.
+- Other numbers have generous ranges and none may be negative: glow `radius`,
+  `gap`, `segment`, `padding`, `rowInset`, `rowCornerRadius` and border
+  `width` up to 100; bevel `width` up to 20; `iconSize` 2 to 200;
+  `scopeWidth` 0.25 to 20; track `thickness` 0.5 to 500; window
+  `cornerRadius` up to 200.
 - `minHeight` must not exceed the window height, and `maxHeight` must not be below it.
 - A wrong type, an unknown `type`, an unknown action or icon name, a color
   that is not a color, and a `$name` missing from the palette.

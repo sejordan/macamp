@@ -100,3 +100,14 @@ private func layout(_ elements: [String], window: String = #"{"size": [300, 200]
     #expect(l.playlistInsertionIndex(element: 0, at: CGPoint(x: 10, y: 199), scroll: 0, count: 2) == 2)
     #expect(l.playlistInsertionIndex(element: 0, at: CGPoint(x: 10, y: 0), scroll: 0, count: 5) == 0)
 }
+
+@Test func sliderRepaintKeyChangesAsTheValueMovesInEitherOrientation() throws {
+    let l = try layout([
+        #"{"type": "slider", "frame": [10, 10, 100, 10], "binds": "seek"}"#,
+        #"{"type": "slider", "frame": [10, 40, 10, 100], "binds": "seek"}"#,
+    ])
+    for element in 0...1 {
+        #expect(l.sliderRepaintKey(element: element, value: 0.2) != l.sliderRepaintKey(element: element, value: 0.6))
+        #expect(l.sliderRepaintKey(element: element, value: 0.5) == l.sliderRepaintKey(element: element, value: 0.5001))
+    }
+}
