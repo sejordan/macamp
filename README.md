@@ -35,13 +35,9 @@ Download `macamp-<version>.zip` from the
 move `macamp.app` to your Applications folder. It needs macOS 14 or later and
 runs on both Apple Silicon and Intel Macs.
 
-The app is not notarized by Apple, so macOS will refuse to open it the first
-time. To allow it, try to open it once, then go to System Settings > Privacy &
-Security, scroll down, and click **Open Anyway**. Or, in Terminal:
-
-```
-xattr -dr com.apple.quarantine /Applications/macamp.app
-```
+The download is signed and notarized by Apple, so it opens like any other
+app. The first time, macOS asks you to confirm that you want to open an app
+downloaded from the internet.
 
 ## Build and run
 
@@ -57,8 +53,20 @@ this way is signed for the Mac that built it and opens there without any
 extra steps.
 
 `scripts/build-app.sh --universal --zip` builds for both Apple Silicon and
-Intel and writes `build/macamp-<version>.zip`, which is how the release
-downloads are made.
+Intel and writes `build/macamp-<version>.zip`.
+
+The release downloads are made the same way, with two settings added so the
+result is signed for distribution and notarized by Apple. Both need an Apple
+Developer account:
+
+```
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARY_PROFILE=your-profile \
+scripts/build-app.sh --universal --zip
+```
+
+`NOTARY_PROFILE` names credentials saved beforehand with
+`xcrun notarytool store-credentials`.
 
 For development:
 

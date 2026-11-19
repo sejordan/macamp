@@ -7,6 +7,10 @@
 #
 # Set SIGN_IDENTITY to a "Developer ID Application: …" certificate name to sign for
 # distribution. Without it the app is signed ad hoc, which is fine on the Mac that built it.
+#
+# Set NOTARY_PROFILE as well, together with --zip, to have Apple notarize the result. It names
+# credentials saved beforehand with:
+#   xcrun notarytool store-credentials <profile> --apple-id <email> --team-id <team>
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -67,5 +71,17 @@ if $zip; then
   archive="build/macamp-$version.zip"
   rm -f "$archive"
   ditto -c -k --keepParent "$app" "$archive"
+  if [ -n "${NOTARY_PROFILE:-}" ]; then
+    if [ -z "${SIGN_IDENTITY:-}" ]; then
+      echo "NOTARY_PROFILE needs SIGN_IDENTITY: Apple only notarizes Developer ID builds" >&2
+      exit 2
+    fi
+    xcrun notarytool submit "$archive" --keychain-profile "$NOTARY_PROFILE" --wait
+    # Attach Apple's approval to the app itself, then zip again so the download carries it.
+    xcrun stapler staple "$app"
+    rm -f "$archive"
+    ditto -c -k --keepParent "$app" "$archive"
+    spctl -a -t exec -vv "$app"
+  fi
   echo "Wrote $archive ($(du -sh "$archive" | cut -f1))"
 fi
