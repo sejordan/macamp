@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "name": "App Icon",
+  "window": { "size": [256, 256], "background": "#00000000", "titleBar": "none" },
+  "elements": [
+    { "type": "rect", "frame": [26, 26, 204, 204], "cornerRadius": 46,
+      "fill": { "gradient": ["#1b2420", "#0a0d0c"], "angle": 90 },
+      "border": { "color": "#2c3a33", "width": 2 } },
+    { "type": "rect", "frame": [62, 150, 22, 44], "fill": "#58e04a", "cornerRadius": 4 },
+    { "type": "rect", "frame": [92, 104, 22, 90], "fill": { "gradient": ["#f4d03f", "#58e04a"], "angle": 90 }, "cornerRadius": 4 },
+    { "type": "rect", "frame": [122, 66, 22, 128], "fill": { "gradient": ["#ff4d3d", "#f4d03f", "#58e04a"], "angle": 90 }, "cornerRadius": 4 },
+    { "type": "rect", "frame": [152, 118, 22, 76], "fill": { "gradient": ["#f4d03f", "#58e04a"], "angle": 90 }, "cornerRadius": 4 },
+    { "type": "rect", "frame": [182, 164, 12, 30], "fill": "#58e04a", "cornerRadius": 4 },
+    { "type": "button", "frame": [0, 0, 1, 1], "action": "playPause", "icon": "none" }
+  ]
+}

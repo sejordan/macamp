@@ -37,6 +37,9 @@ public final class AudioPlayer: AudioPlaying {
     private var pending = 0
     private var playing = false
     private var heldFrame: AVAudioFramePosition = 0
+    /// A known (file frame, clock time) pair. Between refreshes the position is worked out from the
+    /// clock, because asking the player node takes a lock that can stall the caller for milliseconds.
+    private var anchor: (frame: AVAudioFramePosition, time: UInt64)?
     private var latencyFrames: AVAudioFramePosition = 0
     private var chunks: [(start: AVAudioFramePosition, buffer: AVAudioPCMBuffer)] = []
     private var storedVolume = 1.0
@@ -109,6 +112,7 @@ public final class AudioPlayer: AudioPlaying {
             guard playing else { return }
             heldFrame = currentFrame()
             playing = false
+            anchor = nil
             node.pause()
             engine.pause()
         }
@@ -186,6 +190,7 @@ public final class AudioPlayer: AudioPlaying {
         if attached { node.stop() }
         pending = 0
         chunks.removeAll()
+        anchor = nil
     }
 
     private func moveTo(_ frame: AVAudioFramePosition) {
@@ -196,11 +201,21 @@ public final class AudioPlayer: AudioPlaying {
     }
 
     private func currentFrame() -> AVAudioFramePosition {
-        guard playing, let renderTime = node.lastRenderTime, renderTime.isSampleTimeValid,
-              let time = node.playerTime(forNodeTime: renderTime), time.sampleRate > 0 else { return heldFrame }
-        let played = AVAudioFramePosition(Double(time.sampleTime) * sampleRate / time.sampleRate)
-        heldFrame = min(length, max(baseFrame, baseFrame + played))
+        guard playing else { return heldFrame }
+        if anchor == nil { refreshAnchor() }
+        guard let anchor else { return heldFrame }
+        let now = mach_absolute_time()
+        let seconds = now >= anchor.time ? AVAudioTime.seconds(forHostTime: now - anchor.time) : 0
+        heldFrame = min(length, max(baseFrame, anchor.frame + AVAudioFramePosition(seconds * sampleRate)))
         return heldFrame
+    }
+
+    /// Asks the player node where it really is and remembers the answer against the clock.
+    private func refreshAnchor() {
+        guard playing, let renderTime = node.lastRenderTime, renderTime.isSampleTimeValid, renderTime.isHostTimeValid,
+              let time = node.playerTime(forNodeTime: renderTime), time.sampleRate > 0 else { return }
+        let played = AVAudioFramePosition(Double(time.sampleTime) * sampleRate / time.sampleRate)
+        anchor = (baseFrame + played, renderTime.hostTime)
     }
 
     private func fill() {
@@ -227,6 +242,7 @@ public final class AudioPlayer: AudioPlaying {
     private func chunkPlayed(_ scheduledIn: Int) {
         guard scheduledIn == generation else { return }
         pending -= 1
+        refreshAnchor()
         let keepFrom = currentFrame() - latencyFrames - Self.historyFrames
         chunks.removeAll { $0.start + AVAudioFramePosition($0.buffer.frameLength) < keepFrom }
         fill()

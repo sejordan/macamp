@@ -11,9 +11,16 @@ public final class Playlist {
     public var count: Int { tracks.count }
     public var ids: [UUID] { tracks.map(\.id) }
 
+    /// Where the current track was last found. It is asked for on every frame,
+    /// so the common case must not search the whole list.
+    private var currentIndexHint = 0
+
     public var currentIndex: Int? {
         guard let currentID else { return nil }
-        return tracks.firstIndex { $0.id == currentID }
+        if tracks.indices.contains(currentIndexHint), tracks[currentIndexHint].id == currentID { return currentIndexHint }
+        guard let found = tracks.firstIndex(where: { $0.id == currentID }) else { return nil }
+        currentIndexHint = found
+        return found
     }
 
     public var current: Track? { currentIndex.map { tracks[$0] } }

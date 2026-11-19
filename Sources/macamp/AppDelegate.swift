@@ -355,6 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 "tagged": self.controller.playlist.tracks.filter { $0.title != nil }.count,
             ]
             status["nowPlaying"] = self.nowPlaying?.published ?? [:]
+            status["framesDrawn"] = self.view.tickCount
             status["tracks"] = self.controller.playlist.tracks.prefix(8).map {
                 ["file": $0.fileName, "title": $0.title ?? "", "unplayable": $0.unplayable]
             }

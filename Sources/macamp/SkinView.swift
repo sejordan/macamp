@@ -54,12 +54,26 @@ final class SkinView: NSView {
     private var link: CADisplayLink?
     private var lastTick: CFTimeInterval = 0
     private var marqueeTime = 0.0
+    /// Frames drawn since launch, for the diagnostic status file.
+    private(set) var tickCount = 0
+
+    /// A small layer laid over one animated element. Redrawing the whole view through
+    /// AppKit thirty times a second costs several times more CPU than refreshing these,
+    /// so while the display link runs, moving elements are drawn here instead.
+    private final class Tile {
+        let layer = CALayer()
+        var context: CGContext?
+        var size = CGSize.zero
+        var scale: CGFloat = 0
+    }
+    private var tiles: [Int: Tile] = [:]
 
     init(controller: PlayerController, skin: Skin, height: CGFloat) {
         self.controller = controller
         self.skin = skin
         self.renderer = SkinRenderer(skin: skin, windowHeight: height)
         super.init(frame: CGRect(x: 0, y: 0, width: skin.window.size.width, height: height))
+        wantsLayer = true
         registerForDraggedTypes([.fileURL])
         indexElements()
     }
@@ -89,6 +103,7 @@ final class SkinView: NSView {
     }
 
     private func rebuildRenderer() {
+        removeTiles()
         renderer = SkinRenderer(skin: skin, windowHeight: max(1, bounds.height))
         indexElements()
         clampScroll()
@@ -130,14 +145,26 @@ final class SkinView: NSView {
 
     // MARK: State and drawing
 
+    /// The playback position, asked for at most once per frame. A tick and the
+    /// drawing it triggers both need it, and asking the audio engine has a cost.
+    private var positionCache: (elapsed: Double, duration: Double, at: CFTimeInterval)?
+
+    private func position() -> (elapsed: Double, duration: Double) {
+        let now = CACurrentMediaTime()
+        if let cached = positionCache, now - cached.at < 0.008 { return (cached.elapsed, cached.duration) }
+        let fresh = (elapsed: controller.elapsed, duration: controller.duration)
+        positionCache = (fresh.elapsed, fresh.duration, now)
+        return fresh
+    }
+
     private func makeState() -> RenderState {
         var s = RenderState()
-        s.values = controller.templateValues
+        let (elapsed, duration) = position()
+        s.values = controller.templateValues(elapsed: elapsed, duration: duration)
         s.values.showRemaining = showRemaining
         s.isPlaying = controller.status == .playing
         s.isPaused = controller.status == .paused
-        let duration = controller.duration
-        s.seekFraction = duration > 0 ? min(1, controller.elapsed / duration) : 0
+        s.seekFraction = duration > 0 ? min(1, elapsed / duration) : 0
         s.volume = controller.volume
         s.shuffle = controller.order.shuffle
         s.repeatOn = controller.order.repeatMode != .off
@@ -204,6 +231,7 @@ final class SkinView: NSView {
 
     /// The player's state changed outside a tick: a track started, the playlist was edited, and so on.
     func controllerChanged() {
+        positionCache = nil
         let current = controller.playlist.currentID
         if current != lastCurrentID {
             lastCurrentID = current
@@ -232,18 +260,74 @@ final class SkinView: NSView {
         if visible && active {
             guard link == nil else { return }
             let link = displayLink(target: self, selector: #selector(tick(_:)))
-            link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+            // 30 frames a second keeps the bars lively at about half the CPU cost of 60.
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 24, maximum: 30, preferred: 30)
             link.add(to: .main, forMode: .common)
             self.link = link
             lastTick = 0
         } else if let link {
             link.invalidate()
             self.link = nil
+            removeTiles()
             needsDisplay = true
         }
     }
 
+    // MARK: Tiles
+
+    private var animatedElements: Set<Int> { Set(visualizers).union(marquees) }
+
+    private func removeTiles() {
+        guard !tiles.isEmpty else { return }
+        for (element, tile) in tiles {
+            tile.layer.removeFromSuperlayer()
+            invalidate(element)
+        }
+        tiles = [:]
+    }
+
+    /// Makes the set of tiles match the elements that are animating right now.
+    private func syncTiles() {
+        let wanted = animatedElements
+        for (element, tile) in tiles where !wanted.contains(element) {
+            tile.layer.removeFromSuperlayer()
+            tiles[element] = nil
+            invalidate(element)
+        }
+        for element in wanted where tiles[element] == nil {
+            let tile = Tile()
+            tile.layer.actions = ["contents": NSNull(), "position": NSNull(), "bounds": NSNull(), "frame": NSNull()]
+            tile.layer.frame = convertToLayer(renderer.layout.frames[element])
+            layer?.addSublayer(tile.layer)
+            tiles[element] = tile
+        }
+    }
+
+    /// Draws everything that falls inside one element's frame into its tile, through the same
+    /// renderer as the rest of the window, so the tile matches what lies beneath it exactly.
+    private func renderTile(_ element: Int, state: RenderState) {
+        guard let tile = tiles[element] else { return }
+        let frame = renderer.layout.frames[element]
+        let scale = window?.backingScaleFactor ?? 2
+        if tile.context == nil || tile.size != frame.size || tile.scale != scale {
+            tile.context = PNGRenderer.makeContext(width: frame.width, height: frame.height, scale: scale)
+            tile.size = frame.size
+            tile.scale = scale
+            tile.layer.contentsScale = scale
+        }
+        guard let ctx = tile.context else { return }
+        ctx.saveGState()
+        ctx.clear(CGRect(origin: .zero, size: frame.size))
+        ctx.translateBy(x: -frame.minX, y: -frame.minY)
+        renderer.shadowScale = scale
+        renderer.draw(in: ctx, state: state, dirty: frame)
+        renderer.shadowScale = 1
+        ctx.restoreGState()
+        tile.layer.contents = ctx.makeImage()
+    }
+
     @objc private func tick(_ link: CADisplayLink) {
+        tickCount += 1
         let now = link.timestamp
         let dt = lastTick == 0 ? 1.0 / 60 : min(0.1, max(0, now - lastTick))
         lastTick = now
@@ -266,10 +350,14 @@ final class SkinView: NSView {
                 scope = []
             }
             smoother.update(target: target, dt: dt)
-            visualizers.forEach(invalidate)
         }
-        refreshReadouts(with: makeState())
-        if playing { marquees.forEach(invalidate) }
+        let state = makeState()
+        refreshReadouts(with: state)
+        if Set(tiles.keys) != animatedElements { syncTiles() }
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        for element in tiles.keys { renderTile(element, state: state) }
+        CATransaction.commit()
         if !playing && smoother.isSilent { updateTicking() }
     }
 
@@ -516,8 +604,21 @@ final class SkinView: NSView {
 
     /// The window's content as PNG data, drawn through the same path as the screen.
     func snapshotPNG() -> Data? {
-        guard let rep = bitmapImageRepForCachingDisplay(in: bounds) else { return nil }
-        cacheDisplay(in: bounds, to: rep)
-        return rep.representation(using: .png, properties: [:])
+        // Rendered from the layer tree, tiles included, so this shows what Core Animation shows.
+        guard let layer else { return nil }
+        displayIfNeeded()
+        let scale: CGFloat = 2
+        let width = Int(bounds.width * scale), height = Int(bounds.height * scale)
+        guard width > 0, height > 0, let space = CGColorSpace(name: CGColorSpace.sRGB),
+              let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                                  space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.scaleBy(x: scale, y: scale)
+        if layer.isGeometryFlipped || layer.contentsAreFlipped() {
+            ctx.translateBy(x: 0, y: bounds.height)
+            ctx.scaleBy(x: 1, y: -1)
+        }
+        layer.render(in: ctx)
+        guard let image = ctx.makeImage() else { return nil }
+        return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
     }
 }

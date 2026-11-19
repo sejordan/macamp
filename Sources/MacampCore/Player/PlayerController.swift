@@ -54,7 +54,11 @@ public final class PlayerController {
         audio.monoSamples(count: count, into: buffer)
     }
 
-    public var templateValues: TemplateValues {
+    public var templateValues: TemplateValues { templateValues(elapsed: elapsed, duration: duration) }
+
+    /// The same, for callers that already asked the audio engine for the position this frame.
+    /// Asking is not free, and a view may need the values several times per frame.
+    public func templateValues(elapsed: Double, duration length: Double) -> TemplateValues {
         var v = TemplateValues()
         v.count = playlist.count
         switch status {
@@ -68,7 +72,6 @@ public final class PlayerController {
         v.fileName = track.fileName
         v.index = index + 1
         v.elapsed = elapsed
-        let length = duration
         v.duration = length > 0 ? length : track.duration
         if let info = formatInfo {
             v.codec = info.codec; v.sampleRate = info.sampleRate
