@@ -1,3 +1,7 @@
+import Foundation
 import MacampCore
 
-print("macamp \(Macamp.version)")
+if let status = CLI.run(Array(CommandLine.arguments.dropFirst())) {
+    exit(status)
+}
+print(CLI.usage)
