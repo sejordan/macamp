@@ -28,6 +28,21 @@ likeness. To regenerate one after changing a skin:
 .build/debug/macamp --render-skin Phosphor --out docs/screenshots/phosphor.png
 ```
 
+## Install
+
+Download `macamp-<version>.zip` from the
+[Releases page](https://github.com/sejordan/macamp/releases), unzip it, and
+move `macamp.app` to your Applications folder. It needs macOS 14 or later and
+runs on both Apple Silicon and Intel Macs.
+
+The app is not notarized by Apple, so macOS will refuse to open it the first
+time. To allow it, try to open it once, then go to System Settings > Privacy &
+Security, scroll down, and click **Open Anyway**. Or, in Terminal:
+
+```
+xattr -dr com.apple.quarantine /Applications/macamp.app
+```
+
 ## Build and run
 
 Requires macOS 14 or later and the Xcode command-line tools.
@@ -37,8 +52,13 @@ scripts/build-app.sh        # builds build/macamp.app
 open build/macamp.app
 ```
 
-Copy `build/macamp.app` to `/Applications` if you want it there. It is signed
-for local use only.
+Copy `build/macamp.app` to `/Applications` if you want it there. A build made
+this way is signed for the Mac that built it and opens there without any
+extra steps.
+
+`scripts/build-app.sh --universal --zip` builds for both Apple Silicon and
+Intel and writes `build/macamp-<version>.zip`, which is how the release
+downloads are made.
 
 For development:
 
