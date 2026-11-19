@@ -153,7 +153,6 @@ real mouse, keyboard or screen yet:
 - `Sources/macamp`: the AppKit app and the command-line modes.
 - `Sources/MacampCore/Resources`: the built-in skins, the skin guide and the
   JSON Schema, all embedded in the binary.
-- `docs/superpowers`: the design document and the implementation plan.
 
 ## Diagnostics
 
