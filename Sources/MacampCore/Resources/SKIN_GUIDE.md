@@ -72,7 +72,9 @@ read the PNG before telling the user it is done.
 transparent title bar, and the three system window buttons sit at the top
 left, covering roughly x 7 to 67, y 6 to 22. Keep that area clear. The
 system sets the corner radius (about 10 points), so `cornerRadius` is
-ignored with a warning.
+ignored with a warning. The top 28 points are the title bar: elements there
+are drawn, but clicks and drags in that strip go to the window, so keep
+buttons and sliders below y 28.
 
 **`titleBar: "none"`** removes all system chrome. The skin controls the
 window's shape with `cornerRadius` and should include buttons with the

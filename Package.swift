@@ -22,6 +22,11 @@ let package = Package(
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
+            name: "macampTests",
+            dependencies: ["macamp", "MacampCore"],
+            swiftSettings: [.swiftLanguageMode(.v5)]
+        ),
+        .testTarget(
             name: "MacampCoreTests",
             dependencies: ["MacampCore"],
             swiftSettings: [.swiftLanguageMode(.v5)]

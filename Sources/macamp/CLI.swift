@@ -7,6 +7,11 @@ enum CLI {
     struct LaunchOptions {
         var skinPath: String?
         var files: [URL] = []
+        /// Diagnostics: keep saved state somewhere other than the usual place.
+        var stateFile: URL?
+        /// Diagnostics: write a picture of the live window here, then quit.
+        var snapshotFile: URL?
+        var snapshotDelay = 2.0
     }
 
     static var launchOptions = LaunchOptions()
@@ -26,6 +31,12 @@ enum CLI {
       macamp --skin-guide                      print the skin format reference
       macamp --skin-schema                     print the JSON Schema for skins
       macamp --help
+
+    Diagnostics, usable with the options that open the player:
+      --state <file.json>                      keep the saved playlist and settings in this file
+      --snapshot <file.png> [--snapshot-after N]
+                                               after N seconds (default 2) write a picture of the live window
+                                               and <file.png>.json with the player's status, then quit
     """
 
     private static func err(_ text: String) {
@@ -80,16 +91,39 @@ enum CLI {
             return validate(path: args[1])
         case "--render-skin":
             return render(Array(args.dropFirst()))
-        case "--skin":
-            guard args.count >= 2 else { return usageError("--skin needs a skin file") }
-            launchOptions.skinPath = absolute(args[1]).path
-            launchOptions.files = args.dropFirst(2).map(absolute)
-            return nil
         default:
-            if first.hasPrefix("--") { return usageError("unknown option \(first)") }
-            launchOptions.files = args.map(absolute)
-            return nil
+            return parseLaunch(args)
         }
+    }
+
+    /// Options that open the player instead of running a one-shot command.
+    private static func parseLaunch(_ args: [String]) -> Int32? {
+        var options = LaunchOptions()
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            guard arg.hasPrefix("--") else {
+                options.files.append(absolute(arg))
+                i += 1
+                continue
+            }
+            guard i + 1 < args.count else { return usageError("\(arg) needs a value") }
+            let value = args[i + 1]
+            switch arg {
+            case "--skin": options.skinPath = BuiltinSkins.canonicalName(value) ?? absolute(value).path
+            case "--state": options.stateFile = absolute(value)
+            case "--snapshot": options.snapshotFile = absolute(value)
+            case "--snapshot-after":
+                guard let seconds = Double(value), seconds >= 0, seconds <= 600 else {
+                    return usageError("--snapshot-after must be a number of seconds from 0 to 600")
+                }
+                options.snapshotDelay = seconds
+            default: return usageError("unknown option \(arg)")
+            }
+            i += 2
+        }
+        launchOptions = options
+        return nil
     }
 
     private static func absolute(_ path: String) -> URL {
