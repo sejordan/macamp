@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: Launch and quit
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        let firstLaunch = !FileManager.default.fileExists(atPath: stateURL.path)
         let state = AppState.load(from: stateURL)
         controller = PlayerController(audio: AudioPlayer())
         controller.restore(tracks: state.tracks, currentID: state.currentID)
@@ -74,10 +75,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         ready = true
         let launchFiles = options.files + pendingOpen
         pendingOpen = []
+        if firstLaunch { addWelcomeTrack() }
         if !launchFiles.isEmpty { open(launchFiles, playFirstNew: true, playIfIdle: true) }
         verifyRestoredFiles()
         loadMissingMetadata()
         scheduleSnapshotIfRequested()
+    }
+
+    /// The very first time the app runs, its playlist holds the short track that ships with it,
+    /// so there is something to play. It is added once and never comes back after being removed.
+    private func addWelcomeTrack() {
+        let bundled = Bundle.main.url(forResource: "macamp", withExtension: "mp3")
+        guard let track = WelcomeTrack.install(from: bundled, into: stateURL.deletingLastPathComponent()) else { return }
+        controller.add([track], playFirstNew: false, playIfIdle: false)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

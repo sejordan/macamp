@@ -45,6 +45,8 @@ mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$bin" "$app/Contents/MacOS/macamp"
 strip -x "$app/Contents/MacOS/macamp"
 cp scripts/Info.plist "$app/Contents/Info.plist"
+# The track that is in the playlist the first time the app is opened.
+cp assets/macamp.mp3 "$app/Contents/Resources/macamp.mp3"
 
 # The icon is drawn by macamp itself, from a skin file.
 work="$(mktemp -d)"

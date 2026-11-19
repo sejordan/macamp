@@ -78,6 +78,8 @@ swift run macamp            # run without making an app bundle
 
 ## Using it
 
+- **First launch:** the playlist starts with a short welcome track, so there
+  is something to play. Remove it like any other row; it does not come back.
 - **Add music:** drag files or folders onto the window or the Dock icon, use
   File > Open, or "Open With" in Finder. Folders are read recursively.
 - **Formats:** MP3, AAC/M4A, ALAC, FLAC, WAV, AIFF and CAF.
