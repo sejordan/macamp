@@ -7,6 +7,27 @@ no library, no store, no network access and no dependencies beyond macOS.
 Skins are plain JSON files that place and style every element in the window,
 so the player can look however you like.
 
+<p>
+  <img src="docs/screenshots/phosphor.png" width="270" alt="Phosphor skin: a dark window with a glowing green time readout, segmented green-to-red spectrum bars, and a playlist">
+  <img src="docs/screenshots/rack-unit.png" width="270" alt="Rack Unit skin: a beveled metal body with an amber display, chunky square buttons, and its own title bar">
+  <img src="docs/screenshots/native-mini.png" width="270" alt="Native Mini skin: a light modern Mac window with blue spectrum bars beside the track title">
+</p>
+
+The three built-in skins: Phosphor, Rack Unit and Native Mini. Native Mini
+follows the system's light and dark mode:
+
+<p>
+  <img src="docs/screenshots/native-mini-dark.png" width="270" alt="Native Mini skin in dark mode">
+</p>
+
+These pictures are drawn by the player's own `--render-skin` command with
+sample tracks, not captured from a screen, so the window buttons are a
+likeness. To regenerate one after changing a skin:
+
+```
+.build/debug/macamp --render-skin Phosphor --out docs/screenshots/phosphor.png
+```
+
 ## Build and run
 
 Requires macOS 14 or later and the Xcode command-line tools.
