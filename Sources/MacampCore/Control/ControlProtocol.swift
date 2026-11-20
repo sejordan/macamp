@@ -126,6 +126,8 @@ public enum ControlCommand {
     /// Handled by the app, because they concern its window or its lifetime.
     public static let appCommands = ["skin", "quit"]
     public static var all: [String] { playerCommands + appCommands }
+    /// The reference for agents and scripts, printed by `macamp --control-guide`.
+    public static let guide = String(decoding: PackageResources.CONTROL_GUIDE_md, as: UTF8.self)
     /// Commands whose arguments are file paths, which the sender must make absolute.
     public static let pathCommands: Set<String> = ["play", "add", "skin"]
     /// Commands that make sense to send to a player that has to be started first.

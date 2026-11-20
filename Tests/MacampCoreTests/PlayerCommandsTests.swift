@@ -211,3 +211,31 @@ private func musicFolder(_ names: [String]) throws -> URL {
     #expect(run(p, "explode").summary.contains("unknown command"))
     #expect(ControlReply.notRunning.summary == "macamp is not running")
 }
+
+@Test func theControlGuideCoversEveryCommandReplyFieldAndExitStatus() throws {
+    let guide = ControlCommand.guide
+    for command in ControlCommand.all {
+        #expect(guide.contains("`\(command)"), "the guide does not mention the command \(command)")
+    }
+    // Every key an agent can see in a reply must be explained.
+    let (p, _) = rig("a")
+    p.playlist.update(id: p.playlist.tracks[0].id) { $0.title = "T"; $0.artist = "A"; $0.album = "L"; $0.duration = 1 }
+    p.playTrack(at: 0)
+    var reply = run(p, "playlist")
+    reply.error = "example"
+    reply.status?.skin = "Phosphor"
+    var keys: Set<String> = []
+    func collect(_ value: Any) {
+        if let dict = value as? [String: Any] { for (k, v) in dict { keys.insert(k); collect(v) } }
+        if let list = value as? [Any] { list.forEach(collect) }
+    }
+    collect(try JSONSerialization.jsonObject(with: try reply.encoded()))
+    #expect(keys.count >= 20)
+    for key in keys.sorted() {
+        #expect(guide.contains("`\(key)`"), "the guide does not explain the reply field \(key)")
+    }
+    for status in ["| 0 |", "| 1 |", "| 2 |", "| 3 |"] {
+        #expect(guide.contains(status), "the guide does not list exit status \(status)")
+    }
+    #expect(guide.contains("--json"))
+}

@@ -12,6 +12,7 @@ let package = Package(
                 .embedInCode("Resources/Skins/RackUnit.json"),
                 .embedInCode("Resources/Skins/NativeMini.json"),
                 .embedInCode("Resources/SKIN_GUIDE.md"),
+                .embedInCode("Resources/CONTROL_GUIDE.md"),
                 .embedInCode("Resources/skin.schema.json"),
             ],
             swiftSettings: [.swiftLanguageMode(.v5)]

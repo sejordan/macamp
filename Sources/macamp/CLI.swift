@@ -43,6 +43,7 @@ enum CLI {
                                                draw a skin to a PNG without opening a window
       macamp --skin-guide                      print the skin format reference
       macamp --skin-schema                     print the JSON Schema for skins
+      macamp --control-guide                   print the reference for controlling the player (for agents and scripts)
       macamp --help
 
     Controlling a running player (add --json to any of these for machine-readable output):
@@ -59,6 +60,7 @@ enum CLI {
       macamp skin <name | file.json>
       macamp quit
     If no player is running, these start one in the background first (except status and quit).
+    macamp --control-guide prints the full reference, including the JSON reply. Agents should read it.
     Exit status: 0 on success, 1 if the command failed, 2 for bad usage, 3 if status finds no player.
 
     Diagnostics, usable with the options that open the player:
@@ -108,6 +110,9 @@ enum CLI {
             return 0
         case "--skin-schema":
             print(BuiltinSkins.schema)
+            return 0
+        case "--control-guide":
+            print(ControlCommand.guide)
             return 0
         case "--list-skins":
             BuiltinSkins.names.forEach { print($0) }

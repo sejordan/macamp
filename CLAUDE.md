@@ -37,6 +37,8 @@ Then read `/tmp/shot.png` and `/tmp/shot.png.json`. Always use `--state` so the 
 
 ## Controlling the player
 
+The full reference is built into the binary: run `macamp --control-guide` and read it. It lives at `Sources/MacampCore/Resources/CONTROL_GUIDE.md`; a test fails if a command or reply field is missing from it, so update it with the code.
+
 To operate a running player (the user's, or one you start), use the control commands with `--json`:
 
 ```

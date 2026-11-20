@@ -145,6 +145,10 @@ macamp quit
 - `macamp song.mp3` with a player already running hands the file to that
   player instead of opening a second one.
 
+**For AI agents:** the binary carries its own instructions. Tell the agent to
+run `macamp --control-guide` and it will have every command, the JSON reply
+format, the exit codes and some recipes, wherever it is working.
+
 The player listens on a socket file beside its saved state, in
 `~/Library/Application Support/macamp/`, readable only by you. Nothing is
 exposed on the network.
