@@ -2,5 +2,5 @@ import Testing
 @testable import MacampCore
 
 @Test func versionIsSet() {
-    #expect(Macamp.version == "0.1.0")
+    #expect(Macamp.version == "0.2.0")
 }

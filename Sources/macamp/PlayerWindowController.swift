@@ -34,8 +34,9 @@ final class PlayerWindowController: NSObject, NSWindowDelegate {
         keepOnScreen()
     }
 
-    func show() {
-        window.makeKeyAndOrderFront(nil)
+    /// `activate: false` shows the window without taking keyboard focus, for a player started in the background.
+    func show(activate: Bool = true) {
+        if activate { window.makeKeyAndOrderFront(nil) } else { window.orderFront(nil) }
         window.makeFirstResponder(view)
     }
 

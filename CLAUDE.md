@@ -5,7 +5,8 @@ A lightweight native Mac audio player with JSON skins. Swift package, no third-p
 ## Commands
 
 - `swift build` builds a debug binary at `.build/debug/macamp`.
-- `swift test` runs the suite. Two tests play audio through the real engine at zero volume, so nothing is heard.
+- `swift test` runs the suite. A few tests play audio through the real engine at zero volume. Nothing is heard, but starting an audio stream can make Bluetooth earbuds switch to this Mac; add `--skip playbackAdvances --skip pauseHoldsThePosition --skip playingPastTheEnd --skip anEndReportedLate` to leave the sound output alone.
+- Tests must stay silent. Key presses nobody handles make macOS play its alert sound, so window tests use a window that swallows them.
 - `scripts/build-app.sh` builds `build/macamp.app`.
 - `scripts/make-test-audio.sh <folder>` generates tone files in every supported format.
 
@@ -33,6 +34,23 @@ echo '{"volume": 0}' > /tmp/state.json
 ```
 
 Then read `/tmp/shot.png` and `/tmp/shot.png.json`. Always use `--state` so the user's real playlist is not touched, and start from a state file with volume 0.
+
+## Controlling the player
+
+To operate a running player (the user's, or one you start), use the control commands with `--json`:
+
+```
+macamp --json status
+macamp --json play /path/to/folder
+macamp --json seek +30
+```
+
+- The reply is one line of JSON: `ok`, `error` when it failed, and `status` with the full player state. `playlist` is included for the `playlist` command.
+- Exit status: 0 success, 1 command failed, 2 bad usage, 3 `status` found no player.
+- Commands other than `status` and `quit` start a player in the background if none is running.
+- Track numbers start at 1. Paths may be relative; they are resolved before being sent.
+- When testing changes, add `--state /short/tmp/dir/state.json` before the command. That talks to (or starts) a separate player with its own playlist and socket, leaving the user's alone. Keep that path short: socket paths are limited to about 100 characters.
+- `macamp --help` lists every command.
 
 ## Authoring a skin
 

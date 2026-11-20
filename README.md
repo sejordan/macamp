@@ -108,6 +108,47 @@ swift run macamp            # run without making an app bundle
 The player also registers for the keyboard media keys and publishes the
 current track to the system Now Playing panel.
 
+## Controlling it from the command line
+
+The same `macamp` binary can drive a running player, which makes it easy to
+script and easy for an AI agent to operate. Put it on your path once:
+
+```
+ln -s /Applications/macamp.app/Contents/MacOS/macamp /usr/local/bin/macamp
+```
+
+```
+macamp status                       # what is playing, position, volume
+macamp play ~/Music/Some\ Album     # add a folder and start playing it
+macamp play                         # resume
+macamp pause | toggle | stop | next | previous
+macamp jump 3                       # play track 3
+macamp seek +30                     # also 90, 1:30, -10, 50%
+macamp volume 60                    # also +5, -5
+macamp add song.flac                # add without interrupting
+macamp playlist
+macamp remove 2 5                   # by track number
+macamp clear
+macamp shuffle on                   # on, off, toggle
+macamp repeat all                   # off, all, one
+macamp skin "Rack Unit"             # a built-in name or a skin file
+macamp quit
+```
+
+- Every command prints the player's state afterwards, as one line for people.
+  Add `--json` for a machine-readable reply with the full state.
+- If no player is running, a command starts one in the background, without
+  taking focus. `status` and `quit` do not start one.
+- Exit status is 0 on success, 1 if the command failed (the reason goes to
+  standard error, or into the `error` field with `--json`), 2 for bad usage,
+  and 3 when `status` finds no player.
+- `macamp song.mp3` with a player already running hands the file to that
+  player instead of opening a second one.
+
+The player listens on a socket file beside its saved state, in
+`~/Library/Application Support/macamp/`, readable only by you. Nothing is
+exposed on the network.
+
 ## Skins
 
 Three skins are built in and listed in the Skin menu: **Phosphor**,
@@ -148,7 +189,7 @@ Leave the player open with `--skin` on the same file to watch it change.
 
 ## Footprint
 
-Measured on the packaged app on an Apple Silicon Mac running macOS 15.7,
+Measured on the packaged 0.1.0 app on an Apple Silicon Mac running macOS 15.7,
 with `footprint` and `top`:
 
 | Condition | Memory | CPU (one core) |
@@ -156,7 +197,8 @@ with `footprint` and `top`:
 | Playing a FLAC, 1,000 tracks in the playlist, visualizer running | 23 MB | about 3% (1.6% to 4.3% across samples) |
 | Stopped, same playlist loaded | 18 MB | 0% |
 
-The app bundle is 1.3 MB.
+The release download is a 1.1 MB zip; the app inside is about 2 MB, since it
+carries code for both Apple Silicon and Intel.
 
 Paused, hidden and minimized were not measured separately. They take the same
 path as stopped: the audio engine is paused and the redraw timer is off.

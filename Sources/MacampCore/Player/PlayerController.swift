@@ -41,6 +41,9 @@ public final class PlayerController {
         }
     }
 
+    /// True when the audio engine has a track open, so seeking means something.
+    public var hasLoadedTrack: Bool { loadedID != nil }
+
     public var elapsed: Double { loadedID == nil ? 0 : audio.currentTime }
 
     public var duration: Double {

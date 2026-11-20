@@ -8,6 +8,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var skins: SkinManager!
     private var windowController: PlayerWindowController!
     private var nowPlaying: NowPlaying?
+    private var controlRouter: ControlRouter?
+    private var controlServer: ControlServer?
 
     private var ready = false
     private var pendingOpen: [URL] = []
@@ -67,12 +69,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         windowController.onFrameChange = { [weak self] in self?.scheduleSave() }
 
         NSApp.mainMenu = MainMenu.build(delegate: self)
-        windowController.show()
-        NSApp.activate(ignoringOtherApps: true)
+        windowController.show(activate: !options.background)
+        if !options.background { NSApp.activate(ignoringOtherApps: true) }
         nowPlaying = NowPlaying(controller: controller)
         view.controllerChanged()
 
         ready = true
+        startControlServer()
         let launchFiles = options.files + pendingOpen
         pendingOpen = []
         if firstLaunch { addWelcomeTrack() }
@@ -92,7 +95,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
 
-    func applicationWillTerminate(_ notification: Notification) { saveNow() }
+    func applicationWillTerminate(_ notification: Notification) {
+        controlServer?.stop()
+        saveNow()
+    }
+
+    /// Lets `macamp <command>` on the command line reach this player. The socket sits beside the saved state.
+    private func startControlServer() {
+        let router = ControlRouter(controller: controller, skins: skins)
+        router.onFilesAdded = { [weak self] in self?.loadMissingMetadata() }
+        // Quit a moment later, so the reply reaches the command line first.
+        router.onQuit = { DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { NSApp.terminate(nil) } }
+        controlRouter = router
+        let server = ControlServer(path: CLI.socketPath(stateFile: options.stateFile), handlerQueue: .main) { [weak router] request in
+            router?.handle(request) ?? ControlReply(ok: false, error: "the player is shutting down")
+        }
+        do {
+            try server.start()
+            controlServer = server
+        } catch {
+            // Usually another copy already owns the socket; this one simply cannot be controlled from the command line.
+            FileHandle.standardError.write(Data("macamp: command-line control is unavailable (\(error))\n".utf8))
+        }
+    }
 
     /// Files opened from Finder, "Open With" or the Dock icon start playing at once.
     func application(_ application: NSApplication, open urls: [URL]) {

@@ -114,3 +114,97 @@ private func write(name: String, to url: URL) throws {
     let minimize = try #require(window.items.first { $0.title == "Minimize" })
     #expect(minimize.action == #selector(AppDelegate.minimizeWindow(_:)))
 }
+
+// MARK: Command-line control
+
+@MainActor private func router() -> (ControlRouter, PlayerController, SkinManager) {
+    _ = NSApplication.shared
+    let controller = PlayerController(audio: StubAudio())
+    controller.add([URL(fileURLWithPath: "/music/a.mp3"), URL(fileURLWithPath: "/music/b.mp3")], playFirstNew: false, playIfIdle: false)
+    let skins = SkinManager(saved: "Phosphor")
+    return (ControlRouter(controller: controller, skins: skins), controller, skins)
+}
+
+@MainActor @Test func controlRequestsReachThePlayerAndReportTheSkin() {
+    let (router, controller, _) = router()
+    let reply = router.handle(ControlRequest(command: "jump", arguments: ["2"]))
+    #expect(reply.ok && reply.status?.index == 2 && reply.status?.state == "playing")
+    #expect(reply.status?.skin == "Phosphor")
+    #expect(controller.playlist.currentIndex == 1)
+    #expect(router.handle(ControlRequest(command: "status")).status?.skin == "Phosphor")
+}
+
+@MainActor @Test func theSkinCommandTakesBuiltinNamesAndFiles() throws {
+    let (router, _, skins) = router()
+    var reply = router.handle(ControlRequest(command: "skin", arguments: ["rack unit"]))
+    #expect(reply.ok && reply.status?.skin == "Rack Unit")
+
+    let file = try tempSkin(name: "Mine")
+    defer { try? FileManager.default.removeItem(at: file.deletingLastPathComponent()) }
+    reply = router.handle(ControlRequest(command: "skin", arguments: [file.path]))
+    #expect(reply.ok && reply.status?.skin == "Mine")
+
+    try Data("{".utf8).write(to: file)
+    reply = router.handle(ControlRequest(command: "skin", arguments: [file.path]))
+    #expect(!reply.ok && reply.error?.contains("not valid JSON") == true)
+    #expect(reply.status?.skin == "Mine")                    // the last good skin is still showing
+    #expect(skins.current.name == "Mine")
+
+    reply = router.handle(ControlRequest(command: "skin", arguments: ["No Such Skin"]))
+    #expect(!reply.ok && reply.error?.contains("Phosphor") == true)
+    #expect(!router.handle(ControlRequest(command: "skin")).ok)
+}
+
+@MainActor @Test func quitRepliesAndThenAsksTheAppToQuit() {
+    let (router, _, _) = router()
+    var quits = 0
+    router.onQuit = { quits += 1 }
+    #expect(router.handle(ControlRequest(command: "quit")).ok)
+    #expect(quits == 1)
+    #expect(!router.handle(ControlRequest(command: "quit", arguments: ["now"])).ok)
+    #expect(quits == 1)
+}
+
+@MainActor @Test func addingFilesAsksForTheirTagsToBeRead() throws {
+    let (router, _, _) = router()
+    var notified = 0
+    router.onFilesAdded = { notified += 1 }
+    let folder = FileManager.default.temporaryDirectory.appendingPathComponent("macamp-router-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: folder) }
+    FileManager.default.createFile(atPath: folder.appendingPathComponent("x.mp3").path, contents: Data())
+    #expect(router.handle(ControlRequest(command: "add", arguments: [folder.path])).ok)
+    #expect(notified == 1)
+    #expect(!router.handle(ControlRequest(command: "add", arguments: ["/no/such"])).ok)
+    #expect(notified == 1)
+    _ = router.handle(ControlRequest(command: "next"))
+    #expect(notified == 1)
+}
+
+@Test func theCommandLineRecognizesControlCommands() throws {
+    var parsed = try #require(CLI.parseControl(["status"]))
+    #expect(parsed.request == ControlRequest(command: "status") && !parsed.json && parsed.stateFile == nil)
+
+    parsed = try #require(CLI.parseControl(["--json", "seek", "+10"]))
+    #expect(parsed.request == ControlRequest(command: "seek", arguments: ["+10"]) && parsed.json)
+
+    parsed = try #require(CLI.parseControl(["volume", "-5", "--json"]))          // a leading minus is a value, not a flag
+    #expect(parsed.request == ControlRequest(command: "volume", arguments: ["-5"]) && parsed.json)
+
+    parsed = try #require(CLI.parseControl(["--state", "/tmp/x/state.json", "next"]))
+    #expect(parsed.stateFile?.path == "/tmp/x/state.json" && parsed.request.command == "next")
+
+    #expect(CLI.parseControl(["song.mp3"]) == nil)                               // a file to open, not a command
+    #expect(CLI.parseControl(["--skin", "x.json"]) == nil)
+    #expect(CLI.parseControl([]) == nil)
+}
+
+@Test func relativePathsAreMadeAbsoluteBeforeTheyAreSent() throws {
+    let here = FileManager.default.currentDirectoryPath
+    var parsed = try #require(CLI.parseControl(["play", "music/a.mp3", "/abs/b.mp3", "~/c.mp3"]))
+    #expect(parsed.request.arguments == ["\(here)/music/a.mp3", "/abs/b.mp3", NSHomeDirectory() + "/c.mp3"])
+    parsed = try #require(CLI.parseControl(["skin", "Rack Unit"]))               // a skin name is left alone
+    #expect(parsed.request.arguments == ["Rack Unit"])
+    parsed = try #require(CLI.parseControl(["seek", "1:30"]))                    // and so is anything that is not a path
+    #expect(parsed.request.arguments == ["1:30"])
+}

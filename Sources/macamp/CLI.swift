@@ -12,6 +12,19 @@ enum CLI {
         /// Diagnostics: write a picture of the live window here, then quit.
         var snapshotFile: URL?
         var snapshotDelay = 2.0
+        /// Started by a control command: come up without taking focus from what the user is doing.
+        var background = false
+    }
+
+    struct ControlInvocation {
+        var request: ControlRequest
+        var json = false
+        var stateFile: URL?
+    }
+
+    /// Where a player keeps its control socket: beside its saved state.
+    static func socketPath(stateFile: URL?) -> URL {
+        (stateFile ?? AppState.defaultURL).deletingLastPathComponent().appendingPathComponent("control.sock")
     }
 
     static var launchOptions = LaunchOptions()
@@ -31,6 +44,22 @@ enum CLI {
       macamp --skin-guide                      print the skin format reference
       macamp --skin-schema                     print the JSON Schema for skins
       macamp --help
+
+    Controlling a running player (add --json to any of these for machine-readable output):
+      macamp status                            what is playing, position, volume
+      macamp playlist                          every track, numbered from 1
+      macamp play [files or folders…]          resume; or add these and play the first of them
+      macamp add <files or folders…>           add to the playlist without interrupting
+      macamp pause | toggle | stop | next | previous
+      macamp jump <n>                          play track n
+      macamp seek <position>                   90, 1:30, +10, -10 or 50%
+      macamp volume [0-100 | +n | -n]
+      macamp shuffle [on|off|toggle]           macamp repeat [off|all|one]
+      macamp remove <n…>                       macamp clear
+      macamp skin <name | file.json>
+      macamp quit
+    If no player is running, these start one in the background first (except status and quit).
+    Exit status: 0 on success, 1 if the command failed, 2 for bad usage, 3 if status finds no player.
 
     Diagnostics, usable with the options that open the player:
       --state <file.json>                      keep the saved playlist and settings in this file
@@ -92,8 +121,109 @@ enum CLI {
         case "--render-skin":
             return render(Array(args.dropFirst()))
         default:
+            if let control = parseControl(args) { return runControl(control) }
             return parseLaunch(args)
         }
+    }
+
+    // MARK: Controlling a running player
+
+    /// Recognizes `[--json] [--state file] <command> [arguments…]`. Returns nil when the
+    /// arguments are not a control command, so they can be treated as files to open.
+    static func parseControl(_ args: [String]) -> ControlInvocation? {
+        var json = false
+        var stateFile: URL?
+        var words: [String] = []
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            if arg == "--json" {
+                json = true
+            } else if arg == "--state", words.isEmpty, i + 1 < args.count {
+                stateFile = absolute(args[i + 1])
+                i += 1
+            } else if words.isEmpty, arg.hasPrefix("--") {
+                return nil
+            } else {
+                words.append(arg)
+            }
+            i += 1
+        }
+        guard let command = words.first, ControlCommand.all.contains(command) else { return nil }
+        var arguments = Array(words.dropFirst())
+        if ControlCommand.pathCommands.contains(command) {
+            // The player has its own working folder, so paths must not depend on ours.
+            arguments = arguments.map { command == "skin" && BuiltinSkins.canonicalName($0) != nil ? $0 : absolute($0).path }
+        }
+        return ControlInvocation(request: ControlRequest(command: command, arguments: arguments), json: json, stateFile: stateFile)
+    }
+
+    private static func runControl(_ invocation: ControlInvocation) -> Int32 {
+        let socket = socketPath(stateFile: invocation.stateFile)
+        let command = invocation.request.command
+
+        func finish(_ reply: ControlReply, status: Int32? = nil) -> Int32 {
+            if invocation.json {
+                print(String(decoding: (try? reply.encoded()) ?? Data("{\"ok\":false}".utf8), as: UTF8.self))
+            } else if reply.ok {
+                print(reply.summary)
+            } else {
+                err("macamp: \(reply.summary)")
+            }
+            return status ?? (reply.ok ? 0 : 1)
+        }
+        func fail(_ message: String) -> Int32 { finish(ControlReply(ok: false, error: message)) }
+
+        var started = false
+        while true {
+            do {
+                return finish(try ControlClient.send(invocation.request, to: socket))
+            } catch ControlError.notRunning {
+                if command == "status" { return finish(.notRunning, status: 3) }
+                if command == "quit" { return finish(.notRunning) }
+                if started { return fail("the player stopped before it could answer") }
+                guard startPlayer(stateFile: invocation.stateFile, socket: socket) else {
+                    return fail("started macamp, but it did not answer within 15 seconds. An older copy without command-line control may already be running; quit it and try again")
+                }
+                started = true
+            } catch ControlError.timedOut {
+                return fail("the player did not answer in time")
+            } catch ControlError.pathTooLong {
+                return fail("the path \(socket.path) is too long for a control socket")
+            } catch ControlError.failed(let message) {
+                return fail(message)
+            } catch {
+                return fail("could not reach the player")
+            }
+        }
+    }
+
+    /// Starts a player in the background and waits for it to listen. Returns false if it never does.
+    private static func startPlayer(stateFile: URL?, socket: URL) -> Bool {
+        var arguments = ["--background"]
+        if let stateFile { arguments += ["--state", stateFile.path] }
+        let process = Process()
+        let bundle = Bundle.main.bundleURL
+        if bundle.pathExtension == "app" {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            // -g keeps it in the background. A player with its own state file is a separate
+            // instance by intent, so -n lets it start alongside one that is already running.
+            process.arguments = (stateFile == nil ? ["-g"] : ["-g", "-n"]) + ["-a", bundle.path, "--args"] + arguments
+        } else {
+            process.executableURL = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
+            process.arguments = arguments
+        }
+        // The player must not hold on to this command's output, or whoever is reading it would wait forever.
+        process.standardInput = FileHandle.nullDevice
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        guard (try? process.run()) != nil else { return false }
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline {
+            if ControlClient.isRunning(at: socket) { return true }
+            Thread.sleep(forTimeInterval: 0.1)
+        }
+        return false
     }
 
     /// Options that open the player instead of running a one-shot command.
@@ -104,6 +234,11 @@ enum CLI {
             let arg = args[i]
             guard arg.hasPrefix("--") else {
                 options.files.append(absolute(arg))
+                i += 1
+                continue
+            }
+            if arg == "--background" {
+                options.background = true
                 i += 1
                 continue
             }
@@ -121,6 +256,17 @@ enum CLI {
             default: return usageError("unknown option \(arg)")
             }
             i += 2
+        }
+        // Plain `macamp song.mp3` with a player already running hands the files to that player,
+        // the way opening them from Finder would, instead of starting a second one.
+        let plainOpen = !options.files.isEmpty && options.skinPath == nil && options.stateFile == nil
+            && options.snapshotFile == nil && !options.background
+        if plainOpen, ControlClient.isRunning(at: socketPath(stateFile: nil)) {
+            let request = ControlRequest(command: "play", arguments: options.files.map(\.path))
+            if let reply = try? ControlClient.send(request, to: socketPath(stateFile: nil)) {
+                if !reply.ok { err("macamp: \(reply.summary)") }
+                return reply.ok ? 0 : 1
+            }
         }
         launchOptions = options
         return nil

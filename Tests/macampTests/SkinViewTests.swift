@@ -35,12 +35,19 @@ private let testSkin = ##"""
  ]}
 """##
 
+/// A window that counts key presses nobody handled. A real window plays the system alert
+/// sound for those, which a test run must never do.
+private final class QuietWindow: NSWindow {
+    var unhandledKeys = 0
+    override func noResponder(for eventSelector: Selector) { unhandledKeys += 1 }
+}
+
 @MainActor
 private final class Rig {
     let audio = StubAudio()
     let controller: PlayerController
     let view: SkinView
-    let window: NSWindow
+    let window: QuietWindow
     var actions: [ButtonAction] = []
     var dropped: [[URL]] = []
 
@@ -49,8 +56,8 @@ private final class Rig {
         controller = PlayerController(audio: audio)
         let skin = SkinParser.parse(data: Data(testSkin.utf8)).skin!
         view = SkinView(controller: controller, skin: skin, height: 300)
-        window = NSWindow(contentRect: CGRect(x: 0, y: 0, width: 300, height: 300), styleMask: [.borderless],
-                          backing: .buffered, defer: true)
+        window = QuietWindow(contentRect: CGRect(x: 0, y: 0, width: 300, height: 300), styleMask: [.borderless],
+                             backing: .buffered, defer: true)
         window.contentView = view
         view.onAction = { [unowned self] in self.actions.append($0) }
         view.onDrop = { [unowned self] in self.dropped.append($0) }
@@ -238,6 +245,7 @@ private final class Rig {
     rig.key(49, " ", flags: .command)
     rig.key(6, "z", flags: .command)
     #expect(rig.actions.isEmpty)
+    #expect(rig.window.unhandledKeys == 2)       // passed up the chain, where the menus get their turn
 }
 
 @MainActor @Test func selectionShrinksWhenThePlaylistDoes() {
